@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Světýlko</string>
+    <color name="ic_bg">#FF0E1116</color>
+
+    <style name="AppTheme" parent="@android:style/Theme.DeviceDefault.DayNight" />
+
+    <style name="LightTheme" parent="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:colorBackground">@android:color/black</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">always</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>
