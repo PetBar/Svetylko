@@ -7,7 +7,7 @@ stav baterie.
 
 Aplikace je celá v češtině, nemá reklamy, nesbírá data a **nemá ani oprávnění k internetu**.
 
-**[⬇ Stáhnout Svetylko-1.2.apk](https://github.com/PetBar/svetylko/releases/latest)**
+**[⬇ Stáhnout Svetylko-1.2.apk](https://github.com/PetBar/svetylko/raw/main/apk/Svetylko-1.2.apk)**
 
 ## Funkce
 
@@ -41,7 +41,7 @@ Android 11 a novější. Vyzkoušeno na:
 
 ## Instalace
 
-1. Stáhni `Svetylko-1.2.apk` z [Releases](https://github.com/PetBar/svetylko/releases/latest) přímo v telefonu.
+1. Otevři v telefonu odkaz [Svetylko-1.2.apk](https://github.com/PetBar/svetylko/raw/main/apk/Svetylko-1.2.apk) a soubor stáhni.
 2. **Samsung:** dočasně vypni *Nastavení → Zabezpečení a soukromí → Automatický blokovač*.
 3. Otevři stažený soubor a povol instalaci z neznámého zdroje.
 4. Pokud se ozve **Google Play Protect**, zvol *Další podrobnosti → Přesto nainstalovat*.
@@ -56,6 +56,12 @@ Android 11 a novější. Vyzkoušeno na:
 6. Klepni na **Vyzkoušet světýlko**.
 
 Novou verzi nainstaluješ přes starou, nastavení zůstane.
+
+## Historie verzí
+
+- **1.2:** samostatná tečka nabíjení (červená / modrá / zelená), procenta baterie, tři režimy pro Nerušit
+- **1.1:** signalizace nabíjení, hromadný výběr aplikací a hledání
+- **1.0:** první verze
 
 ## Spotřeba baterie
 
