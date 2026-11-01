@@ -89,10 +89,13 @@ public class NotifService extends NotificationListenerService {
         @Override public void onReceive(Context ctx, Intent intent) {
             String a = intent.getAction();
             if (Intent.ACTION_SCREEN_OFF.equals(a)) {
+                DebugLog.add(ctx, "Displej zhasnut (čeká oznámení: " + pending.size() + ")");
                 onScreenOff();
             } else if (Intent.ACTION_SCREEN_ON.equals(a)) {
+                DebugLog.add(ctx, "Displej rozsvícen");
                 handler.removeCallbacks(showRunnable);
             } else if (Intent.ACTION_USER_PRESENT.equals(a)) {
+                DebugLog.add(ctx, "Odemčeno – čekající oznámení smazána");
                 // Odemčeno – uživatel telefon vidí, světýlko se ruší.
                 pending.clear();
                 snoozed = false;
@@ -109,6 +112,15 @@ public class NotifService extends NotificationListenerService {
             updateCharge(intent);
         }
     };
+
+    private static String chargeName(int st) {
+        switch (st) {
+            case CHARGING: return "nabíjí <80 %";
+            case CHARGE_HIGH: return "nabíjí 80–99 %";
+            case CHARGE_FULL: return "nabito";
+            default: return "nenabíjí";
+        }
+    }
 
     private static int levelOf(Intent b) {
         if (b == null) return -1;
@@ -141,6 +153,7 @@ public class NotifService extends NotificationListenerService {
         }
         int old = chargeState;
         chargeState = st;
+        DebugLog.add(this, "Nabíjení: " + chargeName(old) + " → " + chargeName(st) + " (" + lvl + " %)");
         // Znovu rozsvítit po zapojení nabíječky a po nabití (přechod na modrou ne – to by rušilo).
         boolean wake = (old == CHARGE_NONE && st != CHARGE_NONE) || st == CHARGE_FULL;
         if (wake || st == CHARGE_NONE) chargeSnoozed = false;
@@ -153,6 +166,7 @@ public class NotifService extends NotificationListenerService {
 
     @Override
     public void onListenerConnected() {
+        DebugLog.add(this, "Služba připojena k oznámením (verze " + versionName(this) + ")");
         if (!batteryRegistered) {
             Intent sticky = registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
             batteryRegistered = true;
@@ -172,11 +186,13 @@ public class NotifService extends NotificationListenerService {
 
     @Override
     public void onListenerDisconnected() {
+        DebugLog.add(this, "!! Služba ODPOJENA od oznámení (systém ji zastavil)");
         unregister();
     }
 
     @Override
     public void onDestroy() {
+        DebugLog.add(this, "!! Služba ukončena (onDestroy)");
         unregister();
         super.onDestroy();
     }
@@ -195,21 +211,37 @@ public class NotifService extends NotificationListenerService {
 
     @Override
     public void onNotificationPosted(StatusBarNotification sbn, RankingMap rankingMap) {
-        if (!qualifies(sbn, rankingMap)) return;
-        if (isInteractive() && !isKeyguardLocked()) return; // telefon právě používáš – oznámení vidíš
-        int color = ColorUtil.colorFor(this, sbn.getPackageName(), sbn.getNotification());
-        if (color == Prefs.COLOR_OFF) return;
+        String pkg = sbn.getPackageName();
+        if (getPackageName().equals(pkg)) return;
+        String why = rejectReason(sbn, rankingMap);
+        if (why != null) {
+            DebugLog.add(this, "Oznámení " + pkg + " – nesvítí: " + why);
+            return;
+        }
+        if (isInteractive() && !isKeyguardLocked()) {
+            DebugLog.add(this, "Oznámení " + pkg + " – nesvítí: telefon je odemčený a používáš ho");
+            return;
+        }
+        int color = ColorUtil.colorFor(this, pkg, sbn.getNotification());
+        if (color == Prefs.COLOR_OFF) {
+            DebugLog.add(this, "Oznámení " + pkg + " – nesvítí: aplikace není zaškrtnutá");
+            return;
+        }
 
         boolean isNew = !pending.containsKey(sbn.getKey());
         boolean alerts = isNew || (sbn.getNotification().flags & Notification.FLAG_ONLY_ALERT_ONCE) == 0;
         pending.put(sbn.getKey(), color);
         LightActivity.refresh();
 
+        DebugLog.add(this, "Oznámení " + pkg + " – SVÍTIT (barva #" + Integer.toHexString(color & 0xFFFFFF)
+                + (isNew ? "" : ", aktualizace") + (alerts ? "" : ", bez upozornění") + ")");
         if (alerts) {
             snoozed = false;
             if (!isInteractive()) {
                 handler.removeCallbacks(showRunnable);
                 handler.postDelayed(showRunnable, 800);
+            } else {
+                DebugLog.add(this, "  displej svítí (zamčená obrazovka) – rozsvítím po zhasnutí");
             }
         }
     }
@@ -224,21 +256,21 @@ public class NotifService extends NotificationListenerService {
         if (pending.remove(sbn.getKey()) != null) LightActivity.refresh();
     }
 
-    private boolean qualifies(StatusBarNotification sbn, RankingMap rankingMap) {
-        if (!Prefs.enabled(this)) return false;
-        if (getPackageName().equals(sbn.getPackageName())) return false;
-        if (!sbn.isClearable()) return false;
+    /** Důvod, proč oznámení nesvítí, nebo null. */
+    private String rejectReason(StatusBarNotification sbn, RankingMap rankingMap) {
+        if (!Prefs.enabled(this)) return "Světýlko je vypnuté";
         Notification n = sbn.getNotification();
-        if ((n.flags & (Notification.FLAG_ONGOING_EVENT | Notification.FLAG_FOREGROUND_SERVICE
-                | Notification.FLAG_GROUP_SUMMARY)) != 0) return false;
+        if ((n.flags & Notification.FLAG_GROUP_SUMMARY) != 0) return "souhrn skupiny";
+        if (!sbn.isClearable() || (n.flags & (Notification.FLAG_ONGOING_EVENT
+                | Notification.FLAG_FOREGROUND_SERVICE)) != 0) return "trvalé oznámení";
         if (rankingMap != null) {
             Ranking r = new Ranking();
             if (rankingMap.getRanking(sbn.getKey(), r)
                     && r.getImportance() < NotificationManager.IMPORTANCE_DEFAULT) {
-                return false; // tichá oznámení nesvítí
+                return "tiché oznámení (důležitost " + r.getImportance() + ")";
             }
         }
-        return true;
+        return null;
     }
 
     private void onScreenOff() {
@@ -266,9 +298,17 @@ public class NotifService extends NotificationListenerService {
     }
 
     private void tryShow() {
-        if (LightActivity.isStale()) LightActivity.closeIfOpen(false);
-        if (isInteractive() || LightActivity.isOpen()) return;
-        if (!notifActive(this) && !chargeActive(this)) return;
+        if (LightActivity.isStale()) {
+            DebugLog.add(this, "  předchozí světelná obrazovka se nezobrazila – zavírám ji");
+            LightActivity.closeIfOpen(false);
+        }
+        if (isInteractive()) { DebugLog.add(this, "  nerozsvítím: displej svítí"); return; }
+        if (LightActivity.isOpen()) { DebugLog.add(this, "  nerozsvítím: už svítí"); return; }
+        if (!notifActive(this) && !chargeActive(this)) {
+            String why = dndOn(this) ? "režim Nerušit" : (snoozed ? "zhasnuto klepnutím / vypršel čas" : "nic nečeká");
+            DebugLog.add(this, "  nerozsvítím: " + why);
+            return;
+        }
         launch(this, LightActivity.PREVIEW_NONE);
     }
 
@@ -287,19 +327,25 @@ public class NotifService extends NotificationListenerService {
     }
 
     /** Spustí světelnou obrazovku. Při zhasnutém displeji přes celoobrazovkové oznámení. */
-    static void launch(Context c, int preview) {
-        Intent i = new Intent(c, LightActivity.class)
+    static void launch(final Context c, int preview) {
+        final Intent i = new Intent(c, LightActivity.class)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
                         | Intent.FLAG_ACTIVITY_NO_ANIMATION)
                 .putExtra(LightActivity.EXTRA_PREVIEW, preview);
-        if (preview != LightActivity.PREVIEW_NONE) {
+        if (preview != LightActivity.PREVIEW_NONE && preview != LightActivity.PREVIEW_TEST) {
             c.startActivity(i);
             return;
         }
         ensureChannel(c);
         NotificationManager nm = c.getSystemService(NotificationManager.class);
+        boolean enabled = nm != null && nm.areNotificationsEnabled();
         boolean fsiAllowed = Build.VERSION.SDK_INT < 34 || (nm != null && nm.canUseFullScreenIntent());
-        if (nm != null && fsiAllowed && nm.areNotificationsEnabled()) {
+        NotificationChannel ch = nm != null ? nm.getNotificationChannel(CHANNEL) : null;
+        int chImp = ch != null ? ch.getImportance() : -1;
+        DebugLog.add(c, "SPOUŠTÍM světelnou obrazovku" + (preview == LightActivity.PREVIEW_TEST ? " (zkouška)" : "")
+                + ": oznámení=" + (enabled ? "ano" : "NE") + ", celoobrazovková=" + (fsiAllowed ? "ano" : "NE")
+                + ", důležitost kanálu=" + chImp);
+        if (nm != null && fsiAllowed && enabled && chImp >= NotificationManager.IMPORTANCE_HIGH) {
             PendingIntent pi = PendingIntent.getActivity(c, 1, i,
                     PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
             Notification n = new Notification.Builder(c, CHANNEL)
@@ -313,8 +359,47 @@ public class NotifService extends NotificationListenerService {
                     .setTimeoutAfter(20000)
                     .build();
             nm.notify(TRIGGER_ID, n);
+            DebugLog.add(c, "  odesláno celoobrazovkové oznámení");
         } else {
-            try { c.startActivity(i); } catch (Exception ignored) {}
+            DebugLog.add(c, "  celoobrazovkové oznámení nejde použít – zkouším přímé spuštění");
+            startDirect(c, i);
+            return;
+        }
+        // Pojistka (hlavně Xiaomi): když se obrazovka do 3 s nespustí, zkusit ji otevřít přímo.
+        final long t = System.currentTimeMillis();
+        final boolean test = preview == LightActivity.PREVIEW_TEST;
+        new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+            @Override public void run() {
+                if (LightActivity.createdSince(t)) return;
+                PowerManager pm = c.getSystemService(PowerManager.class);
+                android.app.KeyguardManager km = c.getSystemService(android.app.KeyguardManager.class);
+                boolean inUse = pm != null && pm.isInteractive() && km != null && !km.isKeyguardLocked();
+                if (inUse) {
+                    DebugLog.add(c, "  !! obrazovka se nespustila, ale telefon je už odemčený – nechávám být");
+                    return;
+                }
+                if (!test && !notifActive(c) && !chargeActive(c)) return;
+                DebugLog.add(c, "  !! obrazovka se do 3 s nespustila (displej "
+                        + (pm != null && pm.isInteractive() ? "svítí" : "zhasnutý") + ") – zkouším přímé spuštění");
+                startDirect(c, i);
+            }
+        }, 3000);
+    }
+
+    private static void startDirect(Context c, Intent i) {
+        try {
+            c.startActivity(i);
+            DebugLog.add(c, "  přímé spuštění odesláno (na Xiaomi vyžaduje vyskakovací okna na pozadí)");
+        } catch (Exception e) {
+            DebugLog.add(c, "  !! přímé spuštění selhalo: " + e.getClass().getSimpleName());
+        }
+    }
+
+    static String versionName(Context c) {
+        try {
+            return c.getPackageManager().getPackageInfo(c.getPackageName(), 0).versionName;
+        } catch (Exception e) {
+            return "?";
         }
     }
 }

@@ -19,7 +19,11 @@ import java.util.Set;
 public class LightActivity extends Activity {
 
     static final String EXTRA_PREVIEW = "previewMode";
-    static final int PREVIEW_NONE = 0, PREVIEW_ALL = 1, PREVIEW_CHARGE = 2;
+    static final int PREVIEW_NONE = 0, PREVIEW_ALL = 1, PREVIEW_CHARGE = 2, PREVIEW_TEST = 3;
+    private static long lastCreated = 0;
+
+    /** Byla světelná obrazovka vytvořena po čase t? */
+    static boolean createdSince(long t) { return lastCreated >= t; }
 
     private static final int[] PREVIEW_COLORS = {0xFF00E676, 0xFF2979FF, 0xFFFF1744};
     private static final int[] PREVIEW_CHARGE_COLORS = {
@@ -63,7 +67,13 @@ public class LightActivity extends Activity {
         super.onCreate(savedInstanceState);
         current = this;
         createdAt = System.currentTimeMillis();
+        lastCreated = createdAt;
         preview = getIntent().getIntExtra(EXTRA_PREVIEW, PREVIEW_NONE);
+        if (preview == PREVIEW_NONE || preview == PREVIEW_TEST) {
+            PowerManager pm0 = getSystemService(PowerManager.class);
+            DebugLog.add(this, "Světelná obrazovka VYTVOŘENA" + (preview == PREVIEW_TEST ? " (zkouška)" : "")
+                    + ", displej " + (pm0 != null && pm0.isInteractive() ? "svítí" : "zhasnutý"));
+        }
 
         setShowWhenLocked(true);
         setTurnScreenOn(true);
@@ -108,6 +118,7 @@ public class LightActivity extends Activity {
     protected void onResume() {
         super.onResume();
         resumed = true;
+        if (preview == PREVIEW_NONE || preview == PREVIEW_TEST) DebugLog.add(this, "Světelná obrazovka ZOBRAZENA");
         view.start();
         if (preview == PREVIEW_NONE) acquireProximity();
     }
@@ -144,6 +155,9 @@ public class LightActivity extends Activity {
     }
 
     void dismiss(boolean snooze) {
+        if ((preview == PREVIEW_NONE || preview == PREVIEW_TEST) && !isFinishing()) {
+            DebugLog.add(this, "Světelná obrazovka zavřena" + (snooze ? " (klepnutí / zhasnutí / čas)" : " (není co ukázat)"));
+        }
         if (preview == PREVIEW_NONE && snooze) NotifService.snoozeAll();
         if (current == this) current = null;
         if (!isFinishing()) finish();
@@ -155,7 +169,7 @@ public class LightActivity extends Activity {
         int[] charge = null;
 
         if (preview != PREVIEW_NONE) {
-            if (preview == PREVIEW_ALL) notif = PREVIEW_COLORS;
+            if (preview == PREVIEW_ALL || preview == PREVIEW_TEST) notif = PREVIEW_COLORS;
             if (preview == PREVIEW_CHARGE || Prefs.chargeLight(this)) charge = PREVIEW_CHARGE_COLORS;
         } else {
             if (NotifService.notifActive(this)) {

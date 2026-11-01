@@ -7,7 +7,7 @@ stav baterie.
 
 Aplikace je celá v češtině, nemá reklamy, nesbírá data a **nemá ani oprávnění k internetu**.
 
-**[⬇ Stáhnout Svetylko-1.2.apk](https://github.com/PetBar/svetylko/raw/main/apk/Svetylko-1.2.apk)**
+**[⬇ Stáhnout Svetylko-1.4.apk](https://github.com/PetBar/svetylko/raw/main/apk/Svetylko-1.4.apk)**
 
 ## Funkce
 
@@ -29,6 +29,8 @@ Aplikace je celá v češtině, nemá reklamy, nesbírá data a **nemá ani opr�
 
 **Ostatní**
 - režim Nerušit: nesvítí nic / svítí jen nabíjení / svítí vše
+- tlačítko *Zkouška se zhasnutým displejem*: ověří, jestli systém světýlko pustí
+- záznam pro řešení potíží: zobrazit, odeslat, smazat (bez obsahu zpráv)
 - klepnutím světýlko zhasneš, odemčením telefonu zmizí
 - v kapse se displej vypne díky senzoru přiblížení
 - ochrana proti vypálení displeje (světlo se nepatrně posouvá)
@@ -41,7 +43,7 @@ Android 11 a novější. Vyzkoušeno na:
 
 ## Instalace
 
-1. Otevři v telefonu odkaz [Svetylko-1.2.apk](https://github.com/PetBar/svetylko/raw/main/apk/Svetylko-1.2.apk) a soubor stáhni.
+1. Otevři v telefonu odkaz [Svetylko-1.4.apk](https://github.com/PetBar/svetylko/raw/main/apk/Svetylko-1.4.apk) a soubor stáhni.
 2. **Samsung:** dočasně vypni *Nastavení → Zabezpečení a soukromí → Automatický blokovač*.
 3. Otevři stažený soubor a povol instalaci z neznámého zdroje.
 4. Pokud se ozve **Google Play Protect**, zvol *Další podrobnosti → Přesto nainstalovat*.
@@ -52,13 +54,36 @@ Android 11 a novější. Vyzkoušeno na:
    - **Oznámení této aplikace**
    - **Celoobrazovková oznámení:** díky nim se rozsvítí displej
    - **Baterie bez omezení**
-   - **Xiaomi navíc:** *Zobrazit na zamčené obrazovce* a *Autostart*
-6. Klepni na **Vyzkoušet světýlko**.
+6. **Xiaomi:** nastav ještě všechno z části [Xiaomi / HyperOS](#xiaomi--hyperos).
+7. Klepni na **Vyzkoušet světýlko** a pak na **Zkouška se zhasnutým displejem**
+   (hned zhasni displej, za 10 s se má světýlko rozsvítit).
 
 Novou verzi nainstaluješ přes starou, nastavení zůstane.
 
+## Xiaomi / HyperOS
+
+HyperOS má vlastní oprávnění a vlastní spořič baterie. Aplikace je nevidí, takže v ní můžou
+svítit samé zelené fajfky, a přesto ji systém blokuje. V aplikaci jsou pro Xiaomi tři řádky,
+které otevřou správná místa. Ručně je najdeš v *Nastavení → Aplikace → Spravovat aplikace → Světýlko*:
+
+- **Autostart:** zapnout
+- **Spořič baterie:** *Bez omezení*
+- **Další oprávnění:**
+  - *Zobrazit na zamčené obrazovce:* povolit
+  - *Zobrazovat vyskakovací okna při běhu na pozadí:* povolit (bez toho se světýlko nespustí)
+  - *Zobrazovat vyskakovací okna / Plovoucí okna:* povolit, pokud tam jsou
+- **Oznámení:** zapnout *Plovoucí oznámení* a *Oznámení na zamčené obrazovce*,
+  totéž i u kategorie **„Rozsvícení světýlka“**
+- v přehledu spuštěných aplikací podržet Světýlko a **zamknout** ho (zámeček)
+
+Když to pořád nejde: *Záznam pro řešení potíží → Smazat*, pak *Zkouška se zhasnutým displejem*,
+pošli si zprávu se zhasnutým displejem a *Záznam → Zobrazit*. Ze záznamu je vidět, jestli
+aplikace oznámení zachytila a jestli ji systém nechal rozsvítit displej.
+
 ## Historie verzí
 
+- **1.4:** černá úvodní obrazovka, displej při rozsvícení bíle neproblikne
+- **1.3:** zkouška se zhasnutým displejem, záznam pro řešení potíží, pojistka a nastavení pro Xiaomi
 - **1.2:** samostatná tečka nabíjení (červená / modrá / zelená), procenta baterie, tři režimy pro Nerušit
 - **1.1:** signalizace nabíjení, hromadný výběr aplikací a hledání
 - **1.0:** první verze
@@ -80,6 +105,7 @@ src/cz/svetylko/app/
   LightActivity.java  – černá obrazovka přes zamčený displej
   LightView.java      – kreslení kroužku a teček
   MainActivity.java   – nastavení
+  DebugLog.java       – záznam pro řešení potíží
   Prefs.java, ColorUtil.java
 ```
 

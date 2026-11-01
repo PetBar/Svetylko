@@ -25,8 +25,8 @@ cd "$(dirname "$0")"
 : "${KS_PASS:?Nastav KS_PASS}"
 KEYSTORE=${KEYSTORE:-svetylko.keystore}
 KS_ALIAS=${KS_ALIAS:-svetylko}
-VERSION_CODE=${VERSION_CODE:-3}
-VERSION_NAME=${VERSION_NAME:-1.2}
+VERSION_CODE=${VERSION_CODE:-5}
+VERSION_NAME=${VERSION_NAME:-1.4}
 
 rm -rf build && mkdir -p build/gen build/classes build/dex
 

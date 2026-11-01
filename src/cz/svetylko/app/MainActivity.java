@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.NotificationManager;
 import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
@@ -162,6 +163,16 @@ public class MainActivity extends Activity {
         testHint.setAlpha(0.7f);
         content.addView(testHint);
 
+        Button testOff = new Button(this);
+        testOff.setText("Zkouška se zhasnutým displejem");
+        testOff.setOnClickListener(v -> startScreenOffTest());
+        content.addView(testOff, lp(0, px(12), 0, px(4)));
+        TextView testOffHint = text("Klepni a hned zhasni displej tlačítkem. Za 10 s se světýlko rozsvítí "
+                + "stejnou cestou jako u skutečného oznámení. Když se nerozsvítí, blokuje ho systém – "
+                + "pošli mi záznam.", 13, false);
+        testOffHint.setAlpha(0.7f);
+        content.addView(testOffHint);
+
         header("Tečka nabíjení");
         final Switch charge = new Switch(this);
         charge.setText("Signalizovat nabíjení");
@@ -210,6 +221,34 @@ public class MainActivity extends Activity {
                 + "nebo po novém připojení nabíječky.", 13, false);
         chargeHint.setAlpha(0.7f);
         content.addView(chargeHint);
+
+        header("Záznam pro řešení potíží");
+        TextView logHint = text("Aplikace zapisuje, co se děje (čas, název aplikace, proč svítila nebo ne). "
+                + "Obsah zpráv se neukládá. Záznam zůstává v telefonu, dokud ho sám neodešleš.", 13, false);
+        logHint.setAlpha(0.7f);
+        content.addView(logHint);
+        LinearLayout logRow = new LinearLayout(this);
+        logRow.setOrientation(LinearLayout.HORIZONTAL);
+        Button share = new Button(this);
+        share.setText("Odeslat");
+        share.setOnClickListener(v -> shareLog());
+        Button show = new Button(this);
+        show.setText("Zobrazit");
+        show.setOnClickListener(v -> showLog());
+        Button clear = new Button(this);
+        clear.setText("Smazat");
+        clear.setOnClickListener(v -> new AlertDialog.Builder(this)
+                .setMessage("Smazat záznam?")
+                .setPositiveButton("Smazat", (d, w) -> {
+                    DebugLog.clear(this);
+                    DebugLog.add(this, "Záznam smazán");
+                })
+                .setNegativeButton("Zpět", null)
+                .show());
+        logRow.addView(share, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        logRow.addView(show, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        logRow.addView(clear, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        content.addView(logRow, lp(0, px(6), 0, 0));
 
         header("Aplikace a barvy");
         TextView appsHint = text("Zaškrtnuté aplikace svítí. „Auto“ bere barvu z oznámení nebo "
@@ -290,13 +329,17 @@ public class MainActivity extends Activity {
         });
 
         if (isXiaomi()) {
-            permRow("Xiaomi: Zobrazit na zamčené obrazovce + Autostart", null, v -> {
+            permRow("Xiaomi: Zobrazit na zamčené obrazovce, Vyskakovací okna na pozadí", null, v -> {
                 Intent i = new Intent("miui.intent.action.APP_PERM_EDITOR")
                         .setClassName("com.miui.securitycenter",
                                 "com.miui.permcenter.permissions.PermissionsEditorActivity")
                         .putExtra("extra_pkgname", pkg);
                 if (!open(i)) openAppInfo();
             });
+            permRow("Xiaomi: Plovoucí oznámení + na zamčené obrazovce (i kategorie „Rozsvícení světýlka“)", null, v ->
+                    open(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                            .putExtra(Settings.EXTRA_APP_PACKAGE, pkg)));
+            permRow("Xiaomi: Autostart a Spořič baterie → Bez omezení", null, v -> openAppInfo());
         }
 
         TextView hint = text("Když je přepínač šedý a telefon hlásí „omezené nastavení“: "
@@ -538,6 +581,95 @@ public class MainActivity extends Activity {
                 .setNegativeButton("Zpět", null)
                 .create();
         dlg[0].show();
+    }
+
+    // ------------------------------------------------------------------ zkouška a záznam
+
+    private final android.os.Handler testHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+
+    private void startScreenOffTest() {
+        DebugLog.add(this, "ZKOUŠKA: spuštěna, za 10 s se rozsvítí světýlko");
+        android.widget.Toast.makeText(this, "Teď zhasni displej. Za 10 s se rozsvítí světýlko.",
+                android.widget.Toast.LENGTH_LONG).show();
+        final Context app = getApplicationContext();
+        final PowerManager pm = getSystemService(PowerManager.class);
+        final PowerManager.WakeLock wl = pm != null
+                ? pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "svetylko:test") : null;
+        if (wl != null) wl.acquire(20000);
+        testHandler.removeCallbacksAndMessages(null);
+        testHandler.postDelayed(() -> {
+            boolean on = pm != null && pm.isInteractive();
+            DebugLog.add(app, "ZKOUŠKA: uplynulo 10 s, displej " + (on ? "SVÍTÍ (nezhasnul jsi ho?)" : "zhasnutý"));
+            NotifService.launch(app, LightActivity.PREVIEW_TEST);
+            testHandler.postDelayed(() -> {
+                if (wl != null && wl.isHeld()) wl.release();
+            }, 5000);
+        }, 10000);
+    }
+
+    private String logReport() {
+        NotificationManager nm = getSystemService(NotificationManager.class);
+        PowerManager pm = getSystemService(PowerManager.class);
+        StringBuilder sb = new StringBuilder();
+        sb.append("Světýlko ").append(NotifService.versionName(this)).append(" – záznam\n");
+        sb.append("Telefon: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL)
+                .append(", Android ").append(Build.VERSION.RELEASE).append(" (SDK ").append(Build.VERSION.SDK_INT)
+                .append("), ").append(Build.DISPLAY).append('\n');
+        boolean listener = nm != null && nm.isNotificationListenerAccessGranted(
+                new ComponentName(this, NotifService.class));
+        sb.append("Přístup k oznámením: ").append(listener ? "ano" : "NE").append('\n');
+        sb.append("Oznámení aplikace: ").append(nm != null && nm.areNotificationsEnabled() ? "ano" : "NE").append('\n');
+        if (Build.VERSION.SDK_INT >= 34) {
+            sb.append("Celoobrazovková oznámení: ").append(nm != null && nm.canUseFullScreenIntent() ? "ano" : "NE").append('\n');
+        }
+        if (nm != null) {
+            android.app.NotificationChannel ch = nm.getNotificationChannel(NotifService.CHANNEL);
+            sb.append("Kanál „Rozsvícení světýlka“: ").append(ch == null ? "neexistuje"
+                    : "důležitost " + ch.getImportance() + ", zamčená obrazovka " + ch.getLockscreenVisibility())
+                    .append('\n');
+            sb.append("Režim Nerušit: ").append(nm.getCurrentInterruptionFilter()).append('\n');
+        }
+        sb.append("Baterie bez omezení: ").append(pm != null && pm.isIgnoringBatteryOptimizations(getPackageName())
+                ? "ano" : "NE").append('\n');
+        sb.append("Nastavení: zapnuto=").append(Prefs.enabled(this))
+                .append(", styl=").append(Prefs.style(this))
+                .append(", jas=").append(Prefs.brightness(this))
+                .append(", nabíjení=").append(Prefs.chargeLight(this))
+                .append(", Nerušit=").append(Prefs.dndMode(this)).append('\n');
+        sb.append("Stav: čeká oznámení=").append(NotifService.pending.size())
+                .append(", zhasnuto=").append(NotifService.snoozed)
+                .append(", nabíjení=").append(NotifService.chargeState)
+                .append(" (").append(NotifService.batteryLevel).append(" %)\n");
+        sb.append("------------------------------------------------\n");
+        String log = DebugLog.read(this);
+        sb.append(log.isEmpty() ? "(záznam je prázdný)\n" : log);
+        return sb.toString();
+    }
+
+    private void shareLog() {
+        Intent send = new Intent(Intent.ACTION_SEND)
+                .setType("text/plain")
+                .putExtra(Intent.EXTRA_SUBJECT, "Světýlko – záznam")
+                .putExtra(Intent.EXTRA_TEXT, logReport());
+        open(Intent.createChooser(send, "Odeslat záznam"));
+    }
+
+    private void showLog() {
+        ScrollView sv = new ScrollView(this);
+        TextView tv = new TextView(this);
+        tv.setText(logReport());
+        tv.setTextSize(11);
+        tv.setTypeface(Typeface.MONOSPACE);
+        tv.setTextIsSelectable(true);
+        tv.setPadding(px(16), px(8), px(16), px(8));
+        sv.addView(tv);
+        new AlertDialog.Builder(this)
+                .setTitle("Záznam")
+                .setView(sv)
+                .setPositiveButton("Odeslat", (d, w) -> shareLog())
+                .setNegativeButton("Zavřít", null)
+                .show();
+        sv.post(() -> sv.fullScroll(View.FOCUS_DOWN));
     }
 
     // ------------------------------------------------------------------ pomocné
